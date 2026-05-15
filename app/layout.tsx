@@ -1,14 +1,13 @@
-import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
-export const metadata: Metadata = {
+export const metadata = {
   title: 'TaxiPago',
   description: 'Seguimiento de pagos del taxi',
   manifest: '/manifest.json',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'TaxiPago' },
 }
 
-export const viewport: Viewport = {
+export const viewport = {
   width: 'device-width',
   initialScale: 1,
   themeColor: '#ffffff',

@@ -4,8 +4,8 @@ export async function POST(req: NextRequest) {
   try {
     const { monto, medio, dias_cubiertos, dias_parciales } = await req.json()
 
-    const phone = process.env.WHATSAPP_PHONE
-    const apikey = process.env.CALLMEBOT_APIKEY
+    const phone = process.env.WHATSAPP_PHONE as string
+    const apikey = process.env.CALLMEBOT_APIKEY as string
 
     if (!phone || !apikey) {
       return NextResponse.json({ ok: false, error: 'WhatsApp no configurado' })

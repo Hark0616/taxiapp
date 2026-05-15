@@ -23,10 +23,10 @@ export default function LoginPage() {
       setTimeout(() => {
         if (nuevo === PIN_CONDUCTOR) {
           sessionStorage.setItem('rol', 'conductor')
-          router.push('/app')
+          router.push('/panel')
         } else if (nuevo === PIN_DUENO) {
           sessionStorage.setItem('rol', 'dueno')
-          router.push('/app')
+          router.push('/panel')
         } else {
           setError(true)
           setPin('')
