@@ -70,9 +70,15 @@ export default function CalendarioView({ registros, rol, onRefresh }: Props) {
     return parseInt(y) === anio && parseInt(m) - 1 === mes
   })
 
+  const diasSinRegistro = Array.from({ length: diasEnMes }).filter((_, i) => {
+    const d = i + 1
+    const fStr = `${anio}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    return fStr <= hoy && !getRegDia(fStr)
+  }).length
+
   const stats = {
     pagados: registrosMes.filter(r => getEstado(r) === 'pagado').length,
-    pendientes: registrosMes.filter(r => getEstado(r) === 'pendiente').length,
+    pendientes: registrosMes.filter(r => getEstado(r) === 'pendiente').length + diasSinRegistro,
     espera: registrosMes.filter(r => getEstado(r) === 'espera').length,
     recibido: registrosMes.filter(r => getEstado(r) === 'pagado').reduce((s, r) => s + (r.monto || 0), 0),
   }
