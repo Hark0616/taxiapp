@@ -19,7 +19,12 @@ export async function POST(req: NextRequest) {
     texto += `\n\n✅ Confirma en la app`
 
     const url = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodeURIComponent(texto)}&apikey=${apikey}`
-    await fetch(url)
+    const apiRes = await fetch(url)
+    
+    if (!apiRes.ok) {
+      const errorText = await apiRes.text()
+      return NextResponse.json({ ok: false, error: `Error de CallMeBot: ${errorText}` })
+    }
 
     return NextResponse.json({ ok: true })
   } catch (e) {

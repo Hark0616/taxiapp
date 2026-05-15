@@ -127,11 +127,15 @@ export default function PagarView({ registros, config, onRefresh, cargando }: Pr
         }
       }
 
-      await fetch('/api/notificar', {
+      const resNotif = await fetch('/api/notificar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ monto: montoNum, medio, dias_cubiertos: completos, dias_parciales: parciales })
       })
+      const dataNotif = await resNotif.json()
+      if (!dataNotif.ok) {
+        console.error('Error al notificar por WhatsApp:', dataNotif.error)
+      }
 
       setMonto(''); setFoto(null); setFotoPreview(null); setConfirmando(false); setExito(true)
       localStorage.setItem('ultimo_medio', medio)
