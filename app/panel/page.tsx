@@ -70,7 +70,7 @@ export default function AppPage() {
       <main className="flex-1 overflow-y-auto pb-24">
         {tab === 'pagar' && <PagarView registros={registros} onRefresh={cargar} />}
         {tab === 'confirmar' && <ConfirmarView registros={registros} onRefresh={cargar} />}
-        {tab === 'calendario' && <CalendarioView registros={registros} rol={rol} />}
+        {tab === 'calendario' && <CalendarioView registros={registros} rol={rol} onRefresh={cargar} />}
         {tab === 'resumen' && <ResumenView registros={registros} />}
       </main>
 

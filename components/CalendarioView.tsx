@@ -1,10 +1,11 @@
 'use client'
 import { useState } from 'react'
-import { Registro, DIARIO, fmt, fmtFecha, hoyStr, getEstado, MESES } from '@/lib/supabase'
+import { Registro, DIARIO, fmt, fmtFecha, hoyStr, getEstado, MESES, supabase } from '@/lib/supabase'
 
 interface Props {
   registros: Registro[]
   rol: 'conductor' | 'dueno'
+  onRefresh: () => void
 }
 
 const DOW = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
@@ -26,11 +27,40 @@ const DETALLE_COLORS: Record<string, string> = {
   descanso:  'bg-gray-50 border-gray-200 text-gray-700',
 }
 
-export default function CalendarioView({ registros, rol }: Props) {
+export default function CalendarioView({ registros, rol, onRefresh }: Props) {
   const hoy = hoyStr()
   const [mes, setMes] = useState(new Date().getMonth())
   const [anio, setAnio] = useState(new Date().getFullYear())
   const [seleccionado, setSeleccionado] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+
+  function mostrarToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2500)
+  }
+
+  async function marcarDescanso(fecha: string) {
+    const regExistente = getRegDia(fecha)
+    if (regExistente) {
+      await supabase.from('registros').update({ 
+        tipo: 'descanso', monto: 0, medio: null, estado: null 
+      }).eq('id', regExistente.id)
+    } else {
+      await supabase.from('registros').insert({ 
+        fecha, tipo: 'descanso', monto: 0, medio: null, estado: null 
+      })
+    }
+    mostrarToast(`✅ Descanso registrado para ${fmtFecha(fecha)}`)
+    onRefresh()
+  }
+
+  async function quitarDescanso(fecha: string) {
+    const reg = getRegDia(fecha)
+    if (!reg) return
+    await supabase.from('registros').delete().eq('id', reg.id)
+    mostrarToast(`↩️ Día restaurado como normal`)
+    onRefresh()
+  }
 
   const diasEnMes = new Date(anio, mes + 1, 0).getDate()
   const primerDOW = (() => { const d = new Date(anio, mes, 1).getDay(); return d === 0 ? 6 : d - 1 })()
@@ -133,6 +163,20 @@ export default function CalendarioView({ registros, rol }: Props) {
           {estadoSel === 'pendiente' && !regSel && (
             <div className="text-sm mt-1">Debe: <span className="font-medium">{fmt(DIARIO)}</span></div>
           )}
+          {rol === 'conductor' && seleccionado && seleccionado <= hoy && (
+            <div className="mt-3">
+              {(estadoSel === 'pendiente' || estadoSel === 'rechazado') && (
+                <button onClick={() => marcarDescanso(seleccionado)} className="btn-secondary text-sm py-2">
+                  🌙 Marcar como descanso
+                </button>
+              )}
+              {estadoSel === 'descanso' && (
+                <button onClick={() => quitarDescanso(seleccionado)} className="btn-secondary text-sm py-2">
+                  ↩️ Cambiar a día normal
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -163,6 +207,14 @@ export default function CalendarioView({ registros, rol }: Props) {
           </div>
         ))}
       </div>
+
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-gray-900 text-white 
+                        px-5 py-3 rounded-2xl text-sm font-medium shadow-lg z-50
+                        animate-[fadeIn_0.2s_ease-out]">
+          {toast}
+        </div>
+      )}
     </div>
   )
 }

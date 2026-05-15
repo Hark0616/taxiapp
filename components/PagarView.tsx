@@ -101,11 +101,7 @@ export default function PagarView({ registros, onRefresh }: Props) {
     }
   }
 
-  async function marcarDescanso() {
-    if (regHoy) { alert('Ya hay registro de hoy'); return }
-    await supabase.from('registros').insert({ fecha: hoy, tipo: 'descanso', monto: 0, medio: null, estado: null })
-    onRefresh()
-  }
+
 
   const medios: { id: Medio; icon: string; label: string }[] = [
     { id: 'nequi', icon: '📱', label: 'Nequi' },
@@ -200,9 +196,7 @@ export default function PagarView({ registros, onRefresh }: Props) {
       <button onClick={enviar} disabled={!montoNum || enviando} className="btn-primary disabled:opacity-40">
         {enviando ? 'Enviando...' : '📤 Enviar pago al dueño'}
       </button>
-      <button onClick={marcarDescanso} className="btn-secondary">
-        🌙 Hoy es día de descanso
-      </button>
+
     </div>
   )
 }
