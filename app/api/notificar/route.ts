@@ -18,7 +18,13 @@ export async function POST(req: NextRequest) {
     if (dias_parciales > 0) texto += ` y 1 día a medias`
     texto += `\n\n✅ Confirma en la app`
 
-    const url = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodeURIComponent(texto)}&apikey=${apikey}`
+    const params = new URLSearchParams({
+      phone: phone,
+      text: texto,
+      apikey: apikey
+    })
+    
+    const url = `https://api.callmebot.com/whatsapp.php?${params.toString()}`
     const apiRes = await fetch(url)
     
     if (!apiRes.ok) {
