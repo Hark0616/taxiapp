@@ -25,3 +25,15 @@ create policy "acceso_publico" on registros for all using (true) with check (tru
 -- Bucket para fotos de comprobantes
 insert into storage.buckets (id, name, public) values ('fotos', 'fotos', true);
 create policy "fotos_publicas" on storage.objects for all using (bucket_id = 'fotos') with check (bucket_id = 'fotos');
+
+-- Configuración del taxi (fecha de inicio y cuota diaria)
+create table config (
+  id text primary key default 'default',
+  fecha_inicio date not null,
+  cuota_diaria integer not null default 75000,
+  created_at timestamptz default now()
+);
+
+alter table config enable row level security;
+create policy "config_publica" on config for all using (true) with check (true);
+alter publication supabase_realtime add table config;
