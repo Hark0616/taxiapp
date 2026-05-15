@@ -1,24 +1,32 @@
 'use client'
-import { Registro, DIARIO, fmt, fmtFecha, getEstado } from '@/lib/supabase'
+import { Registro, Config, calcularDeuda, fmt, fmtFecha } from '@/lib/supabase'
 
-interface Props { registros: Registro[] }
+interface Props {
+  registros: Registro[]
+  config: Config
+}
 
-export default function ResumenView({ registros }: Props) {
-  const normales = registros.filter(r => r.tipo !== 'descanso')
-  const pagados = normales.filter(r => getEstado(r) === 'pagado')
-  const pendientes = normales.filter(r => getEstado(r) === 'pendiente' || getEstado(r) === 'rechazado')
-  const enEspera = normales.filter(r => r.estado === 'espera')
+export default function ResumenView({ registros, config }: Props) {
+  // Fuente de verdad centralizada
+  const todosLosDias = calcularDeuda(registros, config)
 
-  const totalRecibido = pagados.reduce((s, r) => s + (r.monto || 0), 0)
-  const totalDeuda = pendientes.reduce((s, r) => s + Math.max(0, DIARIO - (r.monto || 0)), 0)
-  const totalEspera = enEspera.reduce((s, r) => s + (r.monto || 0), 0)
+  const pagados = todosLosDias.filter(d => d.estado === 'pagado')
+  const pendientes = todosLosDias.filter(d => d.estado === 'pendiente' || d.estado === 'rechazado')
+  const enEspera = todosLosDias.filter(d => d.estado === 'espera')
+
+  const totalRecibido = pagados.reduce((s, d) => s + d.monto, 0)
+  const totalDeuda = pendientes.reduce((s, d) => s + d.debe, 0)
+  const totalEspera = enEspera.reduce((s, d) => s + d.monto, 0)
 
   const medios = { nequi: 0, efectivo: 0, banco: 0 } as Record<string, number>
-  pagados.forEach(r => { if (r.medio && medios[r.medio] !== undefined) medios[r.medio] += (r.monto || 0) })
+  pagados.forEach(d => {
+    if (d.registro?.medio && medios[d.registro.medio] !== undefined) {
+      medios[d.registro.medio] += d.monto
+    }
+  })
 
   const diasConDeuda = pendientes
-    .map(r => ({ ...r, debe: Math.max(0, DIARIO - (r.monto || 0)) }))
-    .filter(r => r.debe > 0)
+    .filter(d => d.debe > 0)
     .sort((a, b) => a.fecha.localeCompare(b.fecha))
 
   const medioIcons: Record<string, string> = { nequi: '📱', efectivo: '💵', banco: '🏦' }
@@ -69,15 +77,15 @@ export default function ResumenView({ registros }: Props) {
             Días pendientes ({diasConDeuda.length})
           </h3>
           <div className="space-y-2">
-            {diasConDeuda.map(r => (
-              <div key={r.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+            {diasConDeuda.map(d => (
+              <div key={d.fecha} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                 <div>
-                  <div className="text-sm font-medium text-gray-900">{fmtFecha(r.fecha)}</div>
-                  {(r.monto || 0) > 0 && (
-                    <div className="text-xs text-gray-400">Pagó parcial {fmt(r.monto || 0)}</div>
+                  <div className="text-sm font-medium text-gray-900">{fmtFecha(d.fecha)}</div>
+                  {d.monto > 0 && (
+                    <div className="text-xs text-gray-400">Pagó parcial {fmt(d.monto)}</div>
                   )}
                 </div>
-                <div className="text-sm font-semibold text-amber-700">{fmt(r.debe)}</div>
+                <div className="text-sm font-semibold text-amber-700">{fmt(d.debe)}</div>
               </div>
             ))}
           </div>
