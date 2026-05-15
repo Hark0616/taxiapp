@@ -1,16 +1,17 @@
 'use client'
 import { useState, useRef } from 'react'
-import { supabase, Registro, DIARIO, fmt, fmtFecha, hoyStr, getEstado } from '@/lib/supabase'
+import { supabase, Registro, Config, DiaDeuda, calcularDeuda, fmt, fmtFecha, hoyStr } from '@/lib/supabase'
 
 type Medio = 'nequi' | 'efectivo' | 'banco'
 
 interface Props {
   registros: Registro[]
+  config: Config
   onRefresh: () => void
   cargando?: boolean
 }
 
-export default function PagarView({ registros, onRefresh, cargando }: Props) {
+export default function PagarView({ registros, config, onRefresh, cargando }: Props) {
   const [monto, setMonto] = useState('')
   const [medio, setMedio] = useState<Medio>(() => {
     if (typeof window !== 'undefined') {
@@ -27,34 +28,16 @@ export default function PagarView({ registros, onRefresh, cargando }: Props) {
 
   const hoy = hoyStr()
   const regHoy = registros.find(r => r.fecha === hoy)
-  
-  // Calcular deuda incluyendo hoy si no tiene registro
-  let deudaDias = registros
-    .filter(r => r.tipo !== 'descanso' && r.estado !== 'espera')
-    .map(r => ({ ...r, debe: Math.max(0, DIARIO - (r.monto || 0)) }))
-    .filter(r => r.debe > 0)
-    
-  if (!regHoy) {
-    deudaDias.push({
-      id: 'nuevo',
-      fecha: hoy,
-      tipo: 'normal',
-      monto: 0,
-      medio: null,
-      estado: 'pendiente',
-      foto_url: null,
-      nota: null,
-      created_at: new Date().toISOString(),
-      debe: DIARIO
-    })
-  }
-  deudaDias.sort((a, b) => a.fecha.localeCompare(b.fecha))
-  
-  const totalDeuda = deudaDias.reduce((s, r) => s + r.debe, 0)
+  const CUOTA = config.cuota_diaria
+
+  // Fuente de verdad: calcularDeuda() genera TODOS los días desde fecha_inicio
+  const todosLosDias = calcularDeuda(registros, config)
+  const deudaDias = todosLosDias.filter(d => d.debe > 0 && d.estado !== 'espera')
+  const totalDeuda = deudaDias.reduce((s, d) => s + d.debe, 0)
 
   const montoNum = parseInt(monto.replace(/\D/g, '')) || 0
   let resto = montoNum
-  type DiaConPaga = (typeof deudaDias)[0] & { paga: number }
+  type DiaConPaga = DiaDeuda & { paga: number }
   const cobertura: DiaConPaga[] = deudaDias.map(d => {
     if (resto <= 0) return { ...d, paga: 0 }
     const paga = Math.min(resto, d.debe)
@@ -87,43 +70,60 @@ export default function PagarView({ registros, onRefresh, cargando }: Props) {
         }
       }
 
+      // Distribuir pago secuencialmente a los días con deuda (más antiguo primero)
       let r2 = montoNum
       for (const d of deudaDias) {
         if (r2 <= 0) break
         const paga = Math.min(r2, d.debe)
         r2 -= paga
-        
-        const nuevoMonto = (d.monto || 0) + paga
-        const nuevoEstado = nuevoMonto >= DIARIO ? 'espera' : 'pendiente'
-        
-        if (d.id === 'nuevo') {
-          await supabase.from('registros').insert({
-            fecha: hoy, tipo: 'normal', monto: nuevoMonto,
-            medio, estado: nuevoEstado, foto_url
-          })
-        } else {
+
+        const nuevoMonto = d.monto + paga
+        const nuevoEstado = nuevoMonto >= CUOTA ? 'espera' : 'pendiente'
+
+        if (d.registro) {
+          // Día con registro existente → UPDATE
           await supabase.from('registros').update({
             monto: nuevoMonto,
             estado: nuevoEstado,
-            medio: paga > 0 ? medio : d.medio,
-            foto_url: paga > 0 && foto_url ? foto_url : d.foto_url
-          }).eq('id', d.id)
+            medio: paga > 0 ? medio : d.registro.medio,
+            foto_url: d.fecha === hoy && foto_url ? foto_url : d.registro.foto_url
+          }).eq('id', d.registro.id)
+        } else {
+          // Día sin registro (pendiente implícito) → INSERT
+          await supabase.from('registros').insert({
+            fecha: d.fecha,
+            tipo: 'normal',
+            monto: nuevoMonto,
+            medio,
+            estado: nuevoEstado,
+            foto_url: d.fecha === hoy ? foto_url : null
+          })
         }
       }
 
-      // Si pagó más de lo que debía en total
+      // Si pagó más de lo que debe en total (adelanto)
       if (r2 > 0) {
-        if (regHoy) {
+        const regHoyActual = registros.find(r => r.fecha === hoy)
+        if (regHoyActual) {
           await supabase.from('registros').update({
-            monto: (regHoy.monto || 0) + r2,
+            monto: (regHoyActual.monto || 0) + r2,
             estado: 'espera', medio, foto_url
-          }).eq('id', regHoy.id)
+          }).eq('id', regHoyActual.id)
         } else {
-          // Ya se insertó en el loop, lo actualizamos sumándole el sobrante
-          await supabase.from('registros').update({
-            monto: DIARIO + r2,
-            estado: 'espera', medio, foto_url
-          }).eq('fecha', hoy)
+          // Verificar si ya insertamos hoy en el loop
+          const { data: insertado } = await supabase.from('registros').select('id').eq('fecha', hoy).single()
+          if (insertado) {
+            await supabase.from('registros').update({
+              monto: CUOTA + r2,
+              estado: 'espera', medio, foto_url
+            }).eq('id', insertado.id)
+          } else {
+            await supabase.from('registros').insert({
+              fecha: hoy, tipo: 'normal',
+              monto: r2, medio,
+              estado: 'espera', foto_url
+            })
+          }
         }
       }
 
@@ -141,8 +141,6 @@ export default function PagarView({ registros, onRefresh, cargando }: Props) {
       setEnviando(false)
     }
   }
-
-
 
   const medios: { id: Medio; icon: string; label: string }[] = [
     { id: 'nequi', icon: '📱', label: 'Nequi' },
@@ -166,6 +164,11 @@ export default function PagarView({ registros, onRefresh, cargando }: Props) {
           <div className="text-sm text-amber-700 mt-0.5">{deudaDias.length} día{deudaDias.length !== 1 ? 's' : ''} pendiente{deudaDias.length !== 1 ? 's' : ''}</div>
         </div>
       )}
+      {totalDeuda === 0 && !regHoy && (
+        <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-200 text-center">
+          <p className="text-emerald-800 font-medium">✅ Sin deuda pendiente</p>
+        </div>
+      )}
       {regHoy?.estado === 'espera' && (
         <div className="bg-blue-50 rounded-2xl p-4 border border-blue-200 text-center">
           <p className="text-blue-800 font-medium">⏳ Pago de hoy en espera de confirmación</p>
@@ -179,11 +182,11 @@ export default function PagarView({ registros, onRefresh, cargando }: Props) {
 
       {totalDeuda > 0 && regHoy?.estado !== 'espera' && (
         <button 
-          onClick={() => setMonto(String(Math.min(DIARIO, totalDeuda)))}
+          onClick={() => setMonto(String(Math.min(CUOTA, totalDeuda)))}
           className="w-full py-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200 
                      text-emerald-800 font-semibold text-lg active:scale-95 transition-transform"
         >
-          ⚡ Pagar {fmt(Math.min(DIARIO, totalDeuda))}
+          ⚡ Pagar {fmt(Math.min(CUOTA, totalDeuda))}
         </button>
       )}
 
@@ -193,7 +196,7 @@ export default function PagarView({ registros, onRefresh, cargando }: Props) {
           className="input-field text-2xl font-semibold"
           type="number"
           inputMode="numeric"
-          placeholder="75.000"
+          placeholder={String(CUOTA)}
           value={monto}
           onChange={e => setMonto(e.target.value)}
           disabled={cargando || enviando || confirmando}
