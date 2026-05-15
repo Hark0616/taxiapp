@@ -11,10 +11,16 @@ interface Props {
 
 export default function PagarView({ registros, onRefresh }: Props) {
   const [monto, setMonto] = useState('')
-  const [medio, setMedio] = useState<Medio>('nequi')
+  const [medio, setMedio] = useState<Medio>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('ultimo_medio') as Medio) || 'nequi'
+    }
+    return 'nequi'
+  })
   const [foto, setFoto] = useState<File | null>(null)
   const [fotoPreview, setFotoPreview] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const [confirmando, setConfirmando] = useState(false)
   const [exito, setExito] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -93,7 +99,8 @@ export default function PagarView({ registros, onRefresh }: Props) {
         body: JSON.stringify({ monto: montoNum, medio, dias_cubiertos: completos, dias_parciales: parciales })
       })
 
-      setMonto(''); setFoto(null); setFotoPreview(null); setExito(true)
+      setMonto(''); setFoto(null); setFotoPreview(null); setConfirmando(false); setExito(true)
+      localStorage.setItem('ultimo_medio', medio)
       onRefresh()
       setTimeout(() => setExito(false), 3000)
     } finally {
@@ -134,6 +141,16 @@ export default function PagarView({ registros, onRefresh }: Props) {
         <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-200 text-center">
           <p className="text-emerald-800 font-medium">✅ Hoy ya está pagado y confirmado</p>
         </div>
+      )}
+
+      {totalDeuda > 0 && regHoy?.estado !== 'espera' && (
+        <button 
+          onClick={() => setMonto(String(Math.min(DIARIO, totalDeuda)))}
+          className="w-full py-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200 
+                     text-emerald-800 font-semibold text-lg active:scale-95 transition-transform"
+        >
+          ⚡ Pagar {fmt(Math.min(DIARIO, totalDeuda))}
+        </button>
       )}
 
       <div>
@@ -193,9 +210,37 @@ export default function PagarView({ registros, onRefresh }: Props) {
         <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={selFoto} />
       </div>
 
-      <button onClick={enviar} disabled={!montoNum || enviando} className="btn-primary disabled:opacity-40">
-        {enviando ? 'Enviando...' : '📤 Enviar pago al dueño'}
-      </button>
+      {confirmando ? (
+        <div className="bg-gray-50 rounded-2xl p-5 border border-gray-200 space-y-3 mt-4">
+          <h3 className="font-semibold text-gray-900 text-center text-lg">Confirmar pago</h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-500">Monto</span>
+              <span className="font-semibold text-gray-900">{fmt(montoNum)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Medio</span>
+              <span className="font-semibold text-gray-900 capitalize">{medio}</span>
+            </div>
+            {completos > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Cubre</span>
+                <span className="font-semibold text-emerald-700">{completos} día{completos !== 1 ? 's' : ''}</span>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2 pt-2">
+            <button onClick={() => setConfirmando(false)} className="btn-secondary">← Volver</button>
+            <button onClick={enviar} disabled={enviando} className="btn-primary">
+              {enviando ? 'Enviando...' : '✓ Confirmar'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setConfirmando(true)} disabled={!montoNum} className="btn-primary disabled:opacity-40">
+          📤 Enviar pago al dueño
+        </button>
+      )}
 
     </div>
   )
