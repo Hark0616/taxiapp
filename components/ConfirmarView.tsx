@@ -1,13 +1,14 @@
 'use client'
 import { useState } from 'react'
-import { supabase, Registro, DIARIO, fmt, fmtFecha } from '@/lib/supabase'
+import { supabase, Registro, Config, fmt, fmtFecha } from '@/lib/supabase'
 
 interface Props {
   registros: Registro[]
+  config: Config
   onRefresh: () => void
 }
 
-export default function ConfirmarView({ registros, onRefresh }: Props) {
+export default function ConfirmarView({ registros, config, onRefresh }: Props) {
   const [expandida, setExpandida] = useState<string | null>(null)
   const [procesando, setProcesando] = useState<string | null>(null)
 
@@ -77,8 +78,8 @@ export default function ConfirmarView({ registros, onRefresh }: Props) {
                       <div className="flex justify-between"><span>Fecha</span><span className="font-medium text-gray-900">{fmtFecha(r.fecha)}</span></div>
                       <div className="flex justify-between mt-1"><span>Monto</span><span className="font-medium text-gray-900">{fmt(r.monto)}</span></div>
                       <div className="flex justify-between mt-1"><span>Medio</span><span className="font-medium text-gray-900">{medio_icons[r.medio || '']} {r.medio}</span></div>
-                      {r.monto < DIARIO && (
-                        <div className="flex justify-between mt-1 text-amber-700"><span>Queda pendiente</span><span className="font-medium">{fmt(DIARIO - r.monto)}</span></div>
+                      {r.monto < config.cuota_diaria && (
+                        <div className="flex justify-between mt-1 text-amber-700"><span>Queda pendiente</span><span className="font-medium">{fmt(config.cuota_diaria - r.monto)}</span></div>
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">

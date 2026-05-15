@@ -114,7 +114,7 @@ export default function AppPage() {
           }
         `}} />
         {tab === 'pagar' && config && <PagarView registros={registros} config={config} onRefresh={cargar} cargando={cargando} />}
-        {tab === 'confirmar' && <ConfirmarView registros={registros} onRefresh={cargar} />}
+        {tab === 'confirmar' && config && <ConfirmarView registros={registros} config={config} onRefresh={cargar} />}
         {tab === 'calendario' && config && <CalendarioView registros={registros} config={config} rol={rol} onRefresh={cargar} />}
         {tab === 'resumen' && config && <ResumenView registros={registros} config={config} />}
         {tab === 'config' && config && (
