@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+* { -webkit-tap-highlight-color: transparent; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+.btn-primary {
+  @apply w-full py-4 rounded-2xl bg-emerald-600 text-white font-semibold text-base flex items-center justify-center gap-2 active:scale-95 transition-transform;
+}
+.btn-secondary {
+  @apply w-full py-4 rounded-2xl bg-gray-100 text-gray-700 font-semibold text-base flex items-center justify-center gap-2 active:scale-95 transition-transform;
+}
+.btn-danger {
+  @apply w-full py-4 rounded-2xl bg-red-50 text-red-700 font-semibold text-base flex items-center justify-center gap-2 active:scale-95 transition-transform border border-red-200;
+}
+.card {
+  @apply bg-white rounded-2xl border border-gray-100 p-4;
+}
+.input-field {
+  @apply w-full h-14 bg-gray-50 rounded-xl border border-gray-200 text-gray-900 text-lg px-4 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100;
+}
