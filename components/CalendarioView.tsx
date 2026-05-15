@@ -1,9 +1,10 @@
 'use client'
 import { useState } from 'react'
-import { Registro, DIARIO, fmt, fmtFecha, hoyStr, getEstado, MESES, supabase } from '@/lib/supabase'
+import { Registro, Config, DiaDeuda, calcularDeuda, fmt, fmtFecha, hoyStr, MESES, supabase } from '@/lib/supabase'
 
 interface Props {
   registros: Registro[]
+  config: Config
   rol: 'conductor' | 'dueno'
   onRefresh: () => void
 }
@@ -17,6 +18,7 @@ const COLORES: Record<string, string> = {
   rechazado: 'bg-red-100 text-red-800',
   descanso:  'bg-gray-100 text-gray-400',
   futuro:    'text-gray-300',
+  inactivo:  'text-gray-200',
 }
 
 const DETALLE_COLORS: Record<string, string> = {
@@ -27,12 +29,16 @@ const DETALLE_COLORS: Record<string, string> = {
   descanso:  'bg-gray-50 border-gray-200 text-gray-700',
 }
 
-export default function CalendarioView({ registros, rol, onRefresh }: Props) {
+export default function CalendarioView({ registros, config, rol, onRefresh }: Props) {
   const hoy = hoyStr()
   const [mes, setMes] = useState(new Date().getMonth())
   const [anio, setAnio] = useState(new Date().getFullYear())
   const [seleccionado, setSeleccionado] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+
+  // Fuente de verdad centralizada
+  const todosLosDias = calcularDeuda(registros, config)
+  const diasMap = new Map(todosLosDias.map(d => [d.fecha, d]))
 
   function mostrarToast(msg: string) {
     setToast(msg)
@@ -40,11 +46,11 @@ export default function CalendarioView({ registros, rol, onRefresh }: Props) {
   }
 
   async function marcarDescanso(fecha: string) {
-    const regExistente = getRegDia(fecha)
-    if (regExistente) {
+    const dia = diasMap.get(fecha)
+    if (dia?.registro) {
       await supabase.from('registros').update({ 
         tipo: 'descanso', monto: 0, medio: null, estado: null 
-      }).eq('id', regExistente.id)
+      }).eq('id', dia.registro.id)
     } else {
       await supabase.from('registros').insert({ 
         fecha, tipo: 'descanso', monto: 0, medio: null, estado: null 
@@ -55,9 +61,9 @@ export default function CalendarioView({ registros, rol, onRefresh }: Props) {
   }
 
   async function quitarDescanso(fecha: string) {
-    const reg = getRegDia(fecha)
-    if (!reg) return
-    await supabase.from('registros').delete().eq('id', reg.id)
+    const dia = diasMap.get(fecha)
+    if (!dia?.registro) return
+    await supabase.from('registros').delete().eq('id', dia.registro.id)
     mostrarToast(`↩️ Día restaurado como normal`)
     onRefresh()
   }
@@ -65,22 +71,17 @@ export default function CalendarioView({ registros, rol, onRefresh }: Props) {
   const diasEnMes = new Date(anio, mes + 1, 0).getDate()
   const primerDOW = (() => { const d = new Date(anio, mes, 1).getDay(); return d === 0 ? 6 : d - 1 })()
 
-  const registrosMes = registros.filter(r => {
-    const [y, m] = r.fecha.split('-')
+  // Stats del mes usando calcularDeuda()
+  const diasMes = todosLosDias.filter(d => {
+    const [y, m] = d.fecha.split('-')
     return parseInt(y) === anio && parseInt(m) - 1 === mes
   })
 
-  const diasSinRegistro = Array.from({ length: diasEnMes }).filter((_, i) => {
-    const d = i + 1
-    const fStr = `${anio}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    return fStr <= hoy && !getRegDia(fStr)
-  }).length
-
   const stats = {
-    pagados: registrosMes.filter(r => getEstado(r) === 'pagado').length,
-    pendientes: registrosMes.filter(r => getEstado(r) === 'pendiente').length + diasSinRegistro,
-    espera: registrosMes.filter(r => getEstado(r) === 'espera').length,
-    recibido: registrosMes.filter(r => getEstado(r) === 'pagado').reduce((s, r) => s + (r.monto || 0), 0),
+    pagados: diasMes.filter(d => d.estado === 'pagado').length,
+    pendientes: diasMes.filter(d => d.estado === 'pendiente' || d.estado === 'rechazado').length,
+    espera: diasMes.filter(d => d.estado === 'espera').length,
+    recibido: diasMes.filter(d => d.estado === 'pagado').reduce((s, d) => s + d.monto, 0),
   }
 
   function cambiarMes(dir: number) {
@@ -91,25 +92,28 @@ export default function CalendarioView({ registros, rol, onRefresh }: Props) {
     setMes(nm); setAnio(na)
   }
 
-  function getRegDia(fStr: string) {
-    return registros.find(r => r.fecha === fStr)
-  }
-
   function getDiaCls(fStr: string) {
     const esFuturo = fStr > hoy
-    const r = getRegDia(fStr)
+    const esAnterior = fStr < config.fecha_inicio
     const esHoy = fStr === hoy
     const sel = seleccionado === fStr
-    let estado = 'futuro'
-    if (!esFuturo) estado = r ? getEstado(r) : 'pendiente'
+
+    let estado: string
+    if (esFuturo) estado = 'futuro'
+    else if (esAnterior) estado = 'inactivo'
+    else {
+      const dia = diasMap.get(fStr)
+      estado = dia ? dia.estado : 'pendiente'
+    }
+
     const base = COLORES[estado] || ''
     const ring = (esHoy || sel) ? ' ring-2 ring-gray-800 ring-offset-1' : ''
     return base + ring
   }
 
-  const regSel = seleccionado ? getRegDia(seleccionado) : null
+  const diaSel = seleccionado ? diasMap.get(seleccionado) : null
   const estadoSel = seleccionado
-    ? (seleccionado > hoy ? 'futuro' : regSel ? getEstado(regSel) : 'pendiente')
+    ? (seleccionado > hoy ? 'futuro' : seleccionado < config.fecha_inicio ? 'inactivo' : diaSel ? diaSel.estado : 'pendiente')
     : null
 
   const LABELS: Record<string, string> = {
@@ -119,6 +123,7 @@ export default function CalendarioView({ registros, rol, onRefresh }: Props) {
     rechazado: 'Pago rechazado',
     descanso: 'Día de descanso',
     futuro: 'Día futuro',
+    inactivo: 'Antes del inicio',
   }
 
   return (
@@ -150,24 +155,24 @@ export default function CalendarioView({ registros, rol, onRefresh }: Props) {
         })}
       </div>
 
-      {seleccionado && estadoSel && (
+      {seleccionado && estadoSel && estadoSel !== 'inactivo' && (
         <div className={`rounded-2xl p-4 border ${DETALLE_COLORS[estadoSel] || 'bg-gray-50 border-gray-200'}`}>
           <div className="font-semibold mb-1">{fmtFecha(seleccionado)} · {LABELS[estadoSel]}</div>
-          {regSel && regSel.tipo !== 'descanso' && (
+          {diaSel && diaSel.estado !== 'descanso' && (
             <div className="text-sm space-y-0.5 mt-2">
-              {regSel.monto > 0 && <div>Pagado: <span className="font-medium">{fmt(regSel.monto)}</span></div>}
-              {regSel.monto < DIARIO && estadoSel !== 'descanso' && estadoSel !== 'futuro' && (
-                <div>Pendiente: <span className="font-medium">{fmt(DIARIO - (regSel.monto || 0))}</span></div>
+              {diaSel.monto > 0 && <div>Pagado: <span className="font-medium">{fmt(diaSel.monto)}</span></div>}
+              {diaSel.debe > 0 && (
+                <div>Pendiente: <span className="font-medium">{fmt(diaSel.debe)}</span></div>
               )}
-              {regSel.medio && <div>Medio: <span className="font-medium capitalize">{regSel.medio}</span></div>}
-              {regSel.foto_url && rol === 'dueno' && (
-                <a href={regSel.foto_url} target="_blank" rel="noopener noreferrer"
+              {diaSel.registro?.medio && <div>Medio: <span className="font-medium capitalize">{diaSel.registro.medio}</span></div>}
+              {diaSel.registro?.foto_url && rol === 'dueno' && (
+                <a href={diaSel.registro.foto_url} target="_blank" rel="noopener noreferrer"
                   className="block mt-2 text-blue-600 text-sm underline">Ver comprobante</a>
               )}
             </div>
           )}
-          {estadoSel === 'pendiente' && !regSel && (
-            <div className="text-sm mt-1">Debe: <span className="font-medium">{fmt(DIARIO)}</span></div>
+          {estadoSel === 'pendiente' && !diaSel?.registro && (
+            <div className="text-sm mt-1">Debe: <span className="font-medium">{fmt(config.cuota_diaria)}</span></div>
           )}
           {rol === 'conductor' && seleccionado && seleccionado <= hoy && (
             <div className="mt-3">
@@ -183,6 +188,12 @@ export default function CalendarioView({ registros, rol, onRefresh }: Props) {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {seleccionado && estadoSel === 'inactivo' && (
+        <div className="rounded-2xl p-4 border bg-gray-50 border-gray-200 text-gray-400 text-sm text-center">
+          Este día es anterior al inicio de seguimiento ({fmtFecha(config.fecha_inicio)})
         </div>
       )}
 
@@ -206,7 +217,7 @@ export default function CalendarioView({ registros, rol, onRefresh }: Props) {
       </div>
 
       <div className="flex flex-wrap gap-2 pt-1">
-        {Object.entries(LABELS).filter(([k]) => k !== 'futuro').map(([estado, label]) => (
+        {Object.entries(LABELS).filter(([k]) => k !== 'futuro' && k !== 'inactivo').map(([estado, label]) => (
           <div key={estado} className="flex items-center gap-1.5 text-xs text-gray-500">
             <div className={`w-3 h-3 rounded ${COLORES[estado].split(' ')[0]}`} />
             {label}
