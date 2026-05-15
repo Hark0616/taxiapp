@@ -27,11 +27,29 @@ export default function PagarView({ registros, onRefresh, cargando }: Props) {
 
   const hoy = hoyStr()
   const regHoy = registros.find(r => r.fecha === hoy)
-  const deudaDias = registros
+  
+  // Calcular deuda incluyendo hoy si no tiene registro
+  let deudaDias = registros
     .filter(r => r.tipo !== 'descanso' && r.estado !== 'espera')
     .map(r => ({ ...r, debe: Math.max(0, DIARIO - (r.monto || 0)) }))
     .filter(r => r.debe > 0)
-    .sort((a, b) => a.fecha.localeCompare(b.fecha))
+    
+  if (!regHoy) {
+    deudaDias.push({
+      id: 'nuevo',
+      fecha: hoy,
+      tipo: 'normal',
+      monto: 0,
+      medio: null,
+      estado: 'pendiente',
+      foto_url: null,
+      nota: null,
+      created_at: new Date().toISOString(),
+      debe: DIARIO
+    })
+  }
+  deudaDias.sort((a, b) => a.fecha.localeCompare(b.fecha))
+  
   const totalDeuda = deudaDias.reduce((s, r) => s + r.debe, 0)
 
   const montoNum = parseInt(monto.replace(/\D/g, '')) || 0
@@ -69,28 +87,43 @@ export default function PagarView({ registros, onRefresh, cargando }: Props) {
         }
       }
 
-      if (!regHoy) {
-        await supabase.from('registros').insert({
-          fecha: hoy, tipo: 'normal', monto: Math.min(montoNum, DIARIO),
-          medio, estado: 'espera', foto_url
-        })
-      } else {
-        await supabase.from('registros').update({
-          monto: (regHoy.monto || 0) + Math.min(montoNum, DIARIO - (regHoy.monto || 0)),
-          medio, estado: 'espera', foto_url
-        }).eq('fecha', hoy)
-      }
-
       let r2 = montoNum
       for (const d of deudaDias) {
         if (r2 <= 0) break
         const paga = Math.min(r2, d.debe)
         r2 -= paga
-        if (paga > 0) {
+        
+        const nuevoMonto = (d.monto || 0) + paga
+        const nuevoEstado = nuevoMonto >= DIARIO ? 'espera' : 'pendiente'
+        
+        if (d.id === 'nuevo') {
+          await supabase.from('registros').insert({
+            fecha: hoy, tipo: 'normal', monto: nuevoMonto,
+            medio, estado: nuevoEstado, foto_url
+          })
+        } else {
           await supabase.from('registros').update({
-            monto: (d.monto || 0) + paga,
-            estado: (d.monto || 0) + paga >= DIARIO ? 'espera' : d.estado
+            monto: nuevoMonto,
+            estado: nuevoEstado,
+            medio: paga > 0 ? medio : d.medio,
+            foto_url: paga > 0 && foto_url ? foto_url : d.foto_url
           }).eq('id', d.id)
+        }
+      }
+
+      // Si pagó más de lo que debía en total
+      if (r2 > 0) {
+        if (regHoy) {
+          await supabase.from('registros').update({
+            monto: (regHoy.monto || 0) + r2,
+            estado: 'espera', medio, foto_url
+          }).eq('id', regHoy.id)
+        } else {
+          // Ya se insertó en el loop, lo actualizamos sumándole el sobrante
+          await supabase.from('registros').update({
+            monto: DIARIO + r2,
+            estado: 'espera', medio, foto_url
+          }).eq('fecha', hoy)
         }
       }
 
