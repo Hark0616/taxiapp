@@ -7,9 +7,10 @@ type Medio = 'nequi' | 'efectivo' | 'banco'
 interface Props {
   registros: Registro[]
   onRefresh: () => void
+  cargando?: boolean
 }
 
-export default function PagarView({ registros, onRefresh }: Props) {
+export default function PagarView({ registros, onRefresh, cargando }: Props) {
   const [monto, setMonto] = useState('')
   const [medio, setMedio] = useState<Medio>(() => {
     if (typeof window !== 'undefined') {
@@ -162,6 +163,7 @@ export default function PagarView({ registros, onRefresh }: Props) {
           placeholder="75.000"
           value={monto}
           onChange={e => setMonto(e.target.value)}
+          disabled={cargando || enviando || confirmando}
         />
       </div>
 
@@ -179,6 +181,7 @@ export default function PagarView({ registros, onRefresh }: Props) {
           {medios.map(m => (
             <button
               key={m.id}
+              disabled={cargando || enviando || confirmando}
               onClick={() => setMedio(m.id)}
               className={`py-3 rounded-xl flex flex-col items-center gap-1 text-sm font-medium border transition-all ${
                 medio === m.id

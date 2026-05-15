@@ -18,3 +18,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 .input-field {
   @apply w-full h-14 bg-gray-50 rounded-xl border border-gray-200 text-gray-900 text-lg px-4 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100;
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

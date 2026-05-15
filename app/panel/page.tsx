@@ -13,6 +13,7 @@ export default function AppPage() {
   const [tab, setTab] = useState('inicio')
   const [registros, setRegistros] = useState<Registro[]>([])
   const [pendientes, setPendientes] = useState(0)
+  const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
     const r = sessionStorage.getItem('rol') as 'conductor'|'dueno'|null
@@ -28,6 +29,7 @@ export default function AppPage() {
   }, [])
 
   async function cargar() {
+    setCargando(true)
     const { data } = await supabase
       .from('registros')
       .select('*')
@@ -36,6 +38,7 @@ export default function AppPage() {
       setRegistros(data)
       setPendientes(data.filter((r: Registro) => r.estado === 'espera').length)
     }
+    setCargando(false)
   }
 
   function salir() {
@@ -67,8 +70,19 @@ export default function AppPage() {
         </button>
       </header>
 
-      <main className="flex-1 overflow-y-auto pb-24">
-        {tab === 'pagar' && <PagarView registros={registros} onRefresh={cargar} />}
+      <main className="flex-1 overflow-y-auto pb-24 relative">
+        {cargando && (
+          <div className="absolute top-0 left-0 w-full h-1 bg-gray-100 overflow-hidden">
+            <div className="h-full bg-emerald-500 w-1/3 animate-[translateX_1s_infinite_linear]" style={{ animationDuration: '1.5s', animationName: 'progress' }} />
+          </div>
+        )}
+        <style dangerouslySetInnerHTML={{__html: `
+          @keyframes progress {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(300%); }
+          }
+        `}} />
+        {tab === 'pagar' && <PagarView registros={registros} onRefresh={cargar} cargando={cargando} />}
         {tab === 'confirmar' && <ConfirmarView registros={registros} onRefresh={cargar} />}
         {tab === 'calendario' && <CalendarioView registros={registros} rol={rol} onRefresh={cargar} />}
         {tab === 'resumen' && <ResumenView registros={registros} />}
