@@ -73,13 +73,21 @@ export default function PagarView({ registros, config, onRefresh, cargando }: Pr
       }
 
       // Distribuir pago secuencialmente a los días con deuda (más antiguo primero)
+      // Calculamos aquí mismo los contadores reales para usar en el mensaje de WhatsApp
       let r2 = montoNum
+      let diasCompletos = 0
+      let diasParciales = 0
+
       for (const d of deudaDias) {
         if (r2 <= 0) break
         const paga = Math.min(r2, d.debe)
         r2 -= paga
 
+        // Contadores reales de lo que se guardó (para el mensaje de WhatsApp)
         const nuevoMonto = d.monto + paga
+        if (nuevoMonto >= CUOTA) diasCompletos++
+        else if (paga > 0) diasParciales++
+
         const nuevoEstado = nuevoMonto >= CUOTA ? 'espera' : 'pendiente'
 
         if (d.registro) {
@@ -103,7 +111,7 @@ export default function PagarView({ registros, config, onRefresh, cargando }: Pr
         }
       }
 
-      // Si pagó más de lo que debe en total (adelanto)
+      // Si pagó más de lo que debe en total (adelanto puro)
       if (r2 > 0) {
         const regHoyActual = registros.find(r => r.fecha === hoy)
         if (regHoyActual) {
@@ -129,13 +137,14 @@ export default function PagarView({ registros, config, onRefresh, cargando }: Pr
         }
       }
 
-      // Enviar notificación a WhatsApp usando CallMeBot directamente desde el cliente
-      // Esto evita el bloqueo de IPs de Vercel (el mensaje sale desde el WiFi/datos del celular)
+      // Enviar notificación a WhatsApp usando CallMeBot directamente desde el cliente.
+      // Se envía desde el dispositivo del conductor (no desde Vercel) para evitar bloqueos de IP.
       if (config.whatsapp_phone && config.callmebot_apikey) {
         let texto = `🚕 *Pago recibido*\n`
         texto += `Monto: *${fmt(montoNum)}* por ${medio}\n`
-        if (completos > 0) texto += `Cubre ${completos} día${completos !== 1 ? 's' : ''} completo${completos !== 1 ? 's' : ''}`
-        if (parciales > 0) texto += ` y 1 día a medias`
+        if (diasCompletos > 0) texto += `Cubre ${diasCompletos} día${diasCompletos !== 1 ? 's' : ''} completo${diasCompletos !== 1 ? 's' : ''}`
+        if (diasParciales > 0) texto += ` y 1 día a medias`
+        if (r2 > 0) texto += `\n+ ${fmt(r2)} de adelanto`
         texto += `\n\n✅ Confirma en la app`
 
         const params = new URLSearchParams({
@@ -143,20 +152,17 @@ export default function PagarView({ registros, config, onRefresh, cargando }: Pr
           text: texto,
           apikey: config.callmebot_apikey.trim()
         })
-        
-        const url = `https://api.callmebot.com/whatsapp.php?${params.toString()}`
-        
+
         try {
-          // Usamos mode: 'no-cors' porque CallMeBot no soporta CORS.
-          // El navegador enviará la petición pero no nos dejará leer la respuesta.
-          await fetch(url, { mode: 'no-cors' })
-          console.log('Notificación enviada desde el cliente')
+          // mode: 'no-cors' → CallMeBot no soporta CORS, el navegador envía pero no lee la respuesta.
+          await fetch(`https://api.callmebot.com/whatsapp.php?${params.toString()}`, { mode: 'no-cors' })
+          console.log('Notificación WhatsApp enviada desde el dispositivo del conductor')
         } catch (e) {
           console.error('Error al enviar WhatsApp:', e)
-          setErrorNotif(`Pago guardado, pero no se pudo enviar WhatsApp. Error local.`)
+          setErrorNotif('Pago guardado, pero no se pudo enviar la notificación de WhatsApp.')
         }
       } else {
-        console.warn('Faltan credenciales de CallMeBot en la configuración')
+        console.warn('WhatsApp no configurado: falta whatsapp_phone o callmebot_apikey en config')
       }
 
       setMonto(''); setFoto(null); setFotoPreview(null); setConfirmando(false); setExito(true)

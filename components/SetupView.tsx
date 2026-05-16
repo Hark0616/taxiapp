@@ -10,6 +10,8 @@ interface Props {
 export default function SetupView({ onConfigured, initialConfig }: Props) {
   const [fechaInicio, setFechaInicio] = useState(initialConfig?.fecha_inicio || hoyStr())
   const [cuota, setCuota] = useState(String(initialConfig?.cuota_diaria || 75000))
+  const [whatsappPhone, setWhatsappPhone] = useState(initialConfig?.whatsapp_phone || '')
+  const [callmebotApikey, setCallmebotApikey] = useState(initialConfig?.callmebot_apikey || '')
   const [guardando, setGuardando] = useState(false)
 
   const cuotaNum = parseInt(cuota.replace(/\D/g, '')) || 0
@@ -22,7 +24,9 @@ export default function SetupView({ onConfigured, initialConfig }: Props) {
       await supabase.from('config').upsert({
         id: 'default',
         fecha_inicio: fechaInicio,
-        cuota_diaria: cuotaNum
+        cuota_diaria: cuotaNum,
+        whatsapp_phone: whatsappPhone.trim() || null,
+        callmebot_apikey: callmebotApikey.trim() || null
       })
       onConfigured()
     } finally {
@@ -75,6 +79,39 @@ export default function SetupView({ onConfigured, initialConfig }: Props) {
               {fmt(cuotaNum)} por día de trabajo
             </p>
           )}
+        </div>
+
+        <div className="pt-4 border-t border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Notificaciones por WhatsApp (Opcional)</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">
+                Número del dueño (con código de país, ej. +57...)
+              </label>
+              <input
+                type="text"
+                value={whatsappPhone}
+                placeholder="+573001234567"
+                onChange={e => setWhatsappPhone(e.target.value)}
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">
+                CallMeBot API Key
+              </label>
+              <input
+                type="text"
+                value={callmebotApikey}
+                placeholder="1234567"
+                onChange={e => setCallmebotApikey(e.target.value)}
+                className="input-field"
+              />
+              <p className="text-xs text-gray-400 mt-1.5">
+                💡 Obtén tu API Key enviando un mensaje al bot de CallMeBot en WhatsApp.
+              </p>
+            </div>
+          </div>
         </div>
 
         <button
