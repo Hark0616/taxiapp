@@ -140,12 +140,17 @@ export default function PagarView({ registros, config, onRefresh, cargando }: Pr
       // Enviar notificación a WhatsApp usando CallMeBot directamente desde el cliente.
       // Se envía desde el dispositivo del conductor (no desde Vercel) para evitar bloqueos de IP.
       if (config.whatsapp_phone && config.callmebot_apikey) {
-        let texto = `🚕 *Pago recibido*\n`
-        texto += `Monto: *${fmt(montoNum)}* por ${medio}\n`
-        if (diasCompletos > 0) texto += `Cubre ${diasCompletos} día${diasCompletos !== 1 ? 's' : ''} completo${diasCompletos !== 1 ? 's' : ''}`
-        if (diasParciales > 0) texto += ` y 1 día a medias`
-        if (r2 > 0) texto += `\n+ ${fmt(r2)} de adelanto`
-        texto += `\n\n✅ Confirma en la app`
+        // Formateador simple y confiable: no depende de toLocaleString ni del locale del browser
+        const fmtMsg = (n: number) => '$' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+
+        const partes: string[] = []
+        if (diasCompletos > 0) partes.push(`${diasCompletos} dia${diasCompletos !== 1 ? 's' : ''} completo${diasCompletos !== 1 ? 's' : ''}`)
+        if (diasParciales > 0) partes.push(`1 dia a medias`)
+        if (r2 > 0) partes.push(`${fmtMsg(r2)} de adelanto`)
+
+        let texto = `Pago recibido: ${fmtMsg(montoNum)} por ${medio}\n`
+        if (partes.length > 0) texto += `Cubre: ${partes.join(' y ')}\n`
+        texto += `\nConfirma en la app`
 
         const params = new URLSearchParams({
           phone: config.whatsapp_phone.trim(),
