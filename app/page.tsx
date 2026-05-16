@@ -8,9 +8,11 @@ const PIN_DUENO = process.env.NEXT_PUBLIC_PIN_DUENO || '0000'
 export default function LoginPage() {
   const [pin, setPin] = useState('')
   const [error, setError] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
   function presionar(val: string) {
+    if (isLoading) return
     if (val === '⌫') {
       setPin(p => p.slice(0, -1))
       setError(false)
@@ -22,9 +24,11 @@ export default function LoginPage() {
     if (nuevo.length === 4) {
       setTimeout(() => {
         if (nuevo === PIN_CONDUCTOR) {
+          setIsLoading(true)
           sessionStorage.setItem('rol', 'conductor')
           router.push('/panel')
         } else if (nuevo === PIN_DUENO) {
+          setIsLoading(true)
           sessionStorage.setItem('rol', 'dueno')
           router.push('/panel')
         } else {
@@ -51,11 +55,19 @@ export default function LoginPage() {
             pin.length > i
               ? error ? 'bg-red-400 border-red-400' : 'bg-emerald-500 border-emerald-500'
               : 'border-gray-300'
-          }`} />
+          } ${isLoading ? 'animate-pulse' : ''}`} />
         ))}
       </div>
 
-      {error && <p className="text-red-500 text-sm mb-4 -mt-4">PIN incorrecto</p>}
+      <div className="h-6 mb-4 -mt-4 w-full flex justify-center">
+        {error && !isLoading && <p className="text-red-500 text-sm">PIN incorrecto</p>}
+        {isLoading && (
+          <p className="text-emerald-600 text-sm flex items-center justify-center gap-2">
+            <span className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></span>
+            Iniciando sesión...
+          </p>
+        )}
+      </div>
 
       <div className="grid grid-cols-3 gap-4 w-full max-w-xs">
         {teclas.map((t, i) => (
@@ -63,7 +75,8 @@ export default function LoginPage() {
           <button
             key={i}
             onClick={() => presionar(t)}
-            className={`h-16 rounded-2xl text-xl font-semibold active:scale-90 transition-transform ${
+            disabled={isLoading}
+            className={`h-16 rounded-2xl text-xl font-semibold active:scale-90 transition-transform disabled:opacity-50 disabled:active:scale-100 ${
               t === '⌫'
                 ? 'bg-gray-100 text-gray-500'
                 : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
