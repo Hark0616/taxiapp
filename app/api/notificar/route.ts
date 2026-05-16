@@ -61,13 +61,13 @@ export async function POST(req: NextRequest) {
     
     const url = `https://api.callmebot.com/whatsapp.php?${params.toString()}`
     const apiRes = await fetch(url)
+    const responseText = await apiRes.text()
     
-    if (!apiRes.ok) {
-      const errorText = await apiRes.text()
-      return NextResponse.json({ ok: false, error: `Error de CallMeBot: ${errorText}` }, { status: 502 })
+    if (!apiRes.ok || responseText.toLowerCase().includes('error')) {
+      return NextResponse.json({ ok: false, error: `Error de CallMeBot: ${responseText}`, status: apiRes.status }, { status: 502 })
     }
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, callmebot_response: responseText })
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 })
   }
