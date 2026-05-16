@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <head>
-        <link rel="manifest" href="/manifest.json" crossOrigin="use-credentials" />
+        <link rel="manifest" href="/manifest.json" />
       </head>
       <body className="bg-gray-50 min-h-screen flex items-start justify-center">
         <div className="w-full max-w-md min-h-screen bg-white">

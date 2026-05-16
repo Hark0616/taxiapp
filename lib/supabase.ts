@@ -25,6 +25,8 @@ export interface Config {
   id: string
   fecha_inicio: string  // 'YYYY-MM-DD'
   cuota_diaria: number
+  whatsapp_phone?: string | null
+  callmebot_apikey?: string | null
   created_at: string
 }
 
