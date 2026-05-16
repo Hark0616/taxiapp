@@ -24,6 +24,7 @@ export default function PagarView({ registros, config, onRefresh, cargando }: Pr
   const [enviando, setEnviando] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
   const [exito, setExito] = useState(false)
+  const [errorNotif, setErrorNotif] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const hoy = hoyStr()
@@ -58,6 +59,7 @@ export default function PagarView({ registros, config, onRefresh, cargando }: Pr
   async function enviar() {
     if (!montoNum) return
     setEnviando(true)
+    setErrorNotif(null)
     try {
       let foto_url = null
       if (foto) {
@@ -132,9 +134,16 @@ export default function PagarView({ registros, config, onRefresh, cargando }: Pr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ monto: montoNum, medio, dias_cubiertos: completos, dias_parciales: parciales })
       })
-      const dataNotif = await resNotif.json()
-      if (!dataNotif.ok) {
-        console.error('Error al notificar por WhatsApp:', dataNotif.error)
+      let dataNotif: { ok?: boolean; error?: string } = {}
+      try {
+        dataNotif = await resNotif.json()
+      } catch {
+        dataNotif = { ok: false, error: 'Respuesta inválida del servidor de notificación' }
+      }
+      if (!resNotif.ok || !dataNotif.ok) {
+        const mensaje = dataNotif.error || `HTTP ${resNotif.status}`
+        console.error('Error al notificar por WhatsApp:', mensaje)
+        setErrorNotif(`Pago guardado, pero no se pudo enviar WhatsApp: ${mensaje}`)
       }
 
       setMonto(''); setFoto(null); setFotoPreview(null); setConfirmando(false); setExito(true)
@@ -166,6 +175,12 @@ export default function PagarView({ registros, config, onRefresh, cargando }: Pr
         <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200">
           <div className="text-2xl font-semibold text-amber-900">{fmt(totalDeuda)}</div>
           <div className="text-sm text-amber-700 mt-0.5">{deudaDias.length} día{deudaDias.length !== 1 ? 's' : ''} pendiente{deudaDias.length !== 1 ? 's' : ''}</div>
+        </div>
+      )}
+
+      {errorNotif && (
+        <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 text-sm text-amber-800">
+          ⚠️ {errorNotif}
         </div>
       )}
       {totalDeuda === 0 && !regHoy && (

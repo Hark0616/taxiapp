@@ -31,8 +31,14 @@ create table config (
   id text primary key default 'default',
   fecha_inicio date not null,
   cuota_diaria integer not null default 75000,
+  whatsapp_phone text,
+  callmebot_apikey text,
   created_at timestamptz default now()
 );
+
+-- Si la tabla ya existe en producción, agrega estas columnas:
+alter table config add column if not exists whatsapp_phone text;
+alter table config add column if not exists callmebot_apikey text;
 
 alter table config enable row level security;
 create policy "config_publica" on config for all using (true) with check (true);
