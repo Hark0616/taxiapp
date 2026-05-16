@@ -129,21 +129,34 @@ export default function PagarView({ registros, config, onRefresh, cargando }: Pr
         }
       }
 
-      const resNotif = await fetch('/api/notificar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ monto: montoNum, medio, dias_cubiertos: completos, dias_parciales: parciales })
-      })
-      let dataNotif: { ok?: boolean; error?: string } = {}
-      try {
-        dataNotif = await resNotif.json()
-      } catch {
-        dataNotif = { ok: false, error: 'Respuesta inválida del servidor de notificación' }
-      }
-      if (!resNotif.ok || !dataNotif.ok) {
-        const mensaje = dataNotif.error || `HTTP ${resNotif.status}`
-        console.error('Error al notificar por WhatsApp:', mensaje)
-        setErrorNotif(`Pago guardado, pero no se pudo enviar WhatsApp: ${mensaje}`)
+      // Enviar notificación a WhatsApp usando CallMeBot directamente desde el cliente
+      // Esto evita el bloqueo de IPs de Vercel (el mensaje sale desde el WiFi/datos del celular)
+      if (config.whatsapp_phone && config.callmebot_apikey) {
+        let texto = `🚕 *Pago recibido*\n`
+        texto += `Monto: *${fmt(montoNum)}* por ${medio}\n`
+        if (completos > 0) texto += `Cubre ${completos} día${completos !== 1 ? 's' : ''} completo${completos !== 1 ? 's' : ''}`
+        if (parciales > 0) texto += ` y 1 día a medias`
+        texto += `\n\n✅ Confirma en la app`
+
+        const params = new URLSearchParams({
+          phone: config.whatsapp_phone.trim(),
+          text: texto,
+          apikey: config.callmebot_apikey.trim()
+        })
+        
+        const url = `https://api.callmebot.com/whatsapp.php?${params.toString()}`
+        
+        try {
+          // Usamos mode: 'no-cors' porque CallMeBot no soporta CORS.
+          // El navegador enviará la petición pero no nos dejará leer la respuesta.
+          await fetch(url, { mode: 'no-cors' })
+          console.log('Notificación enviada desde el cliente')
+        } catch (e) {
+          console.error('Error al enviar WhatsApp:', e)
+          setErrorNotif(`Pago guardado, pero no se pudo enviar WhatsApp. Error local.`)
+        }
+      } else {
+        console.warn('Faltan credenciales de CallMeBot en la configuración')
       }
 
       setMonto(''); setFoto(null); setFotoPreview(null); setConfirmando(false); setExito(true)
